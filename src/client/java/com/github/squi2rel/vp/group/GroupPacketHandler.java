@@ -14,6 +14,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
+import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -38,6 +39,8 @@ public class GroupPacketHandler {
                 case "stop" -> stop();
                 case "pause" -> pause(object);
                 case "seek" -> seek(object);
+                case "playlist_update" -> playlistUpdate(object);
+                case "skip", "play_next" -> playNext(object);
                 case "error" -> error(object);
                 default -> LOGGER.info("Unknown group message type: {}", type);
             }
@@ -126,6 +129,44 @@ public class GroupPacketHandler {
         ClientVideoScreen screen = boundScreenOrWarn();
         if (screen == null) return;
         ScreenControl.seek(screen, longValue(object, "progress", 0));
+    }
+
+    private static void playNext(JsonObject object) {
+        if (object.has("video") && object.get("video").isJsonObject()) {
+            play(object);
+            return;
+        }
+        stop();
+    }
+
+    private static void playlistUpdate(JsonObject object) {
+        ArrayList<GroupPlaylistItem> playlist = new ArrayList<>();
+        JsonArray array = object.has("playlist") && object.get("playlist").isJsonArray() ? object.getAsJsonArray("playlist") : new JsonArray();
+        for (JsonElement element : array) {
+            if (element.isJsonObject()) {
+                playlist.add(gson.fromJson(element, GroupPlaylistItem.class));
+            }
+        }
+        if (GroupClient.state == null) GroupClient.state = new GroupRoomState();
+        GroupClient.state.playlist = playlist;
+        updateBoundPlaylist();
+        message("群组队列已更新，共 " + playlist.size() + " 项", Formatting.GREEN);
+    }
+
+    private static void updateBoundPlaylist() {
+        ClientVideoScreen screen = GroupClient.getBoundScreen();
+        if (screen == null || GroupClient.state == null || GroupClient.state.playlist == null) return;
+        VideoInfo[] infos = GroupClient.state.playlist.stream()
+                .map(GroupPacketHandler::videoInfo)
+                .filter(info -> info != null)
+                .toArray(VideoInfo[]::new);
+        ScreenControl.updatePlaylist(screen, infos);
+    }
+
+    private static VideoInfo videoInfo(GroupPlaylistItem item) {
+        if (item.video != null) return item.video;
+        if (item.url == null) return null;
+        return new VideoInfo(item.requesterName == null ? "" : item.requesterName, item.name == null ? item.url : item.name, item.url, item.url, -1, false, new String[0]);
     }
 
     private static void playBound(VideoInfo info, long progress) {

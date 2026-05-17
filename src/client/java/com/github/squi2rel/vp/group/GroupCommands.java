@@ -21,6 +21,7 @@ import net.minecraft.util.Formatting;
 
 import java.net.URI;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import static com.github.squi2rel.vp.VideoPlayerMain.LOGGER;
 
@@ -67,6 +68,16 @@ public class GroupCommands {
                 .then(ClientCommandManager.literal("seek")
                         .then(ClientCommandManager.argument("seconds", FloatArgumentType.floatArg(0))
                                 .executes(s -> seek(s.getSource(), s.getArgument("seconds", Float.class)))))
+                .then(ClientCommandManager.literal("queue")
+                        .then(ClientCommandManager.literal("add")
+                                .then(ClientCommandManager.argument("url", StringArgumentType.greedyString())
+                                        .executes(s -> queueAdd(s.getSource(), s.getArgument("url", String.class)))))
+                        .then(ClientCommandManager.literal("list")
+                                .executes(s -> queueList(s.getSource())))
+                        .then(ClientCommandManager.literal("skip")
+                                .executes(s -> queueSkip(s.getSource())))
+                        .then(ClientCommandManager.literal("clear")
+                                .executes(s -> queueClear(s.getSource()))))
                 .then(ClientCommandManager.literal("status")
                         .executes(s -> status(s.getSource())));
     }
@@ -227,6 +238,63 @@ public class GroupCommands {
         return Command.SINGLE_SUCCESS;
     }
 
+    private static int queueAdd(FabricClientCommandSource source, String url) {
+        if (!checkRoomReady(source)) return 0;
+        MinecraftClient client = MinecraftClient.getInstance();
+        String playerName = client.player == null ? "" : client.player.getName().getString();
+        CompletableFuture<VideoInfo> future = VideoProviders.from(url, new NamedProviderSource(playerName));
+        if (future == null) {
+            source.sendFeedback(Text.literal("无法解析视频源").formatted(Formatting.RED));
+            return 0;
+        }
+        source.sendFeedback(Text.literal("正在解析队列视频...").formatted(Formatting.YELLOW));
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                return future.get();
+            } catch (Exception e) {
+                LOGGER.error(e.toString());
+                return null;
+            }
+        }).thenAccept(info -> MinecraftClient.getInstance().execute(() -> {
+            if (info == null) {
+                source.sendFeedback(Text.literal("无法解析视频源").formatted(Formatting.RED));
+                return;
+            }
+            JsonObject json = packet("queue_add");
+            json.addProperty("url", url);
+            json.add("video", gson.toJsonTree(info));
+            send(json);
+            source.sendFeedback(Text.literal("已发送加入群组队列请求").formatted(Formatting.GREEN));
+        }));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int queueList(FabricClientCommandSource source) {
+        if (GroupClient.state == null || GroupClient.state.playlist == null || GroupClient.state.playlist.isEmpty()) {
+            source.sendFeedback(Text.literal("群组队列为空").formatted(Formatting.GOLD));
+            return Command.SINGLE_SUCCESS;
+        }
+        String text = GroupClient.state.playlist.stream()
+                .map(item -> item.name == null || item.name.isEmpty() ? item.url : item.name)
+                .collect(Collectors.joining("\n"));
+        source.sendFeedback(Text.literal("群组队列:\n" + text).formatted(Formatting.GOLD));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int queueSkip(FabricClientCommandSource source) {
+        if (!checkRoomReady(source)) return 0;
+        send(packet("queue_skip"));
+        source.sendFeedback(Text.literal("已发送跳过队列请求").formatted(Formatting.GREEN));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int queueClear(FabricClientCommandSource source) {
+        if (!checkRoomReady(source)) return 0;
+        send(packet("queue_clear"));
+        source.sendFeedback(Text.literal("已发送清空队列请求").formatted(Formatting.GREEN));
+        return Command.SINGLE_SUCCESS;
+    }
+
     private static int status(FabricClientCommandSource source) {
         String bound = GroupClient.isBound() ? GroupClient.boundArea + " / " + GroupClient.boundScreen : "未绑定";
         String boundState = GroupClient.isBound() && GroupClient.getBoundScreen() == null ? "（当前不可用）" : "";
@@ -248,13 +316,16 @@ public class GroupCommands {
     }
 
     private static boolean checkPlaybackReady(FabricClientCommandSource source) {
-        if (!checkConnected(source)) return false;
-        if (GroupClient.roomId == null) {
-            source.sendFeedback(Text.literal("尚未加入群组房间").formatted(Formatting.RED));
-            return false;
-        }
+        if (!checkRoomReady(source)) return false;
         if (GroupClient.getBoundScreen() != null) return true;
         source.sendFeedback(Text.literal("群组屏幕未绑定或当前不可用").formatted(Formatting.RED));
+        return false;
+    }
+
+    private static boolean checkRoomReady(FabricClientCommandSource source) {
+        if (!checkConnected(source)) return false;
+        if (GroupClient.roomId != null) return true;
+        source.sendFeedback(Text.literal("尚未加入群组房间").formatted(Formatting.RED));
         return false;
     }
 
