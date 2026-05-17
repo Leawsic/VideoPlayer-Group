@@ -1,6 +1,7 @@
 package com.github.squi2rel.vp;
 
 import com.github.squi2rel.vp.group.GroupCommands;
+import com.github.squi2rel.vp.group.GroupSyncManager;
 import com.github.squi2rel.vp.local.LocalAreaCommands;
 import com.github.squi2rel.vp.local.LocalAreaManager;
 import com.github.squi2rel.vp.network.PacketID;
@@ -458,6 +459,7 @@ public class VideoPlayerClient implements ClientModInitializer {
                                                 })))))
         ));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            GroupSyncManager.tick();
             if (client.player == null || client.world == null || client.currentScreen != null || currentLooking == null) return;
             boolean pressed = client.options.useKey.isPressed();
             if (pressed && !keyPressed) {

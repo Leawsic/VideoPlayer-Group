@@ -18,6 +18,7 @@ public class GroupClient {
     public static long lastSeq;
     public static String boundArea;
     public static String boundScreen;
+    public static VideoInfoSync latestSync;
 
     public static void updateState(GroupRoomState roomState, String playerUuid) {
         state = roomState;
@@ -58,5 +59,12 @@ public class GroupClient {
 
     public static boolean isBound() {
         return boundArea != null && boundScreen != null;
+    }
+
+    public static class VideoInfoSync {
+        public long progress;
+        public boolean paused;
+        public float rate;
+        public long clientTime;
     }
 }

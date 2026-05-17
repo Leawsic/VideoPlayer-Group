@@ -191,6 +191,7 @@ public class GroupCommands {
                 source.sendFeedback(Text.literal("群组屏幕未绑定或当前不可用").formatted(Formatting.RED));
                 return;
             }
+            GroupSyncManager.setCurrentVideo(info, 0);
             ScreenControl.play(screen, info, 0);
             JsonObject json = packet("play");
             json.add("video", gson.toJsonTree(info));

@@ -15,6 +15,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
 import java.util.ArrayList;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -39,6 +40,7 @@ public class GroupPacketHandler {
                 case "stop" -> stop();
                 case "pause" -> pause(object);
                 case "seek" -> seek(object);
+                case "sync_state" -> syncState(object);
                 case "playlist_update" -> playlistUpdate(object);
                 case "skip", "play_next" -> playNext(object);
                 case "error" -> error(object);
@@ -112,6 +114,10 @@ public class GroupPacketHandler {
     }
 
     private static void stop() {
+        if (GroupClient.state != null) {
+            GroupClient.state.currentVideo = null;
+            GroupClient.state.currentProgress = 0;
+        }
         ClientVideoScreen screen = boundScreenOrWarn();
         if (screen == null) return;
         ScreenControl.stop(screen);
@@ -126,9 +132,20 @@ public class GroupPacketHandler {
     }
 
     private static void seek(JsonObject object) {
+        long progress = longValue(object, "progress", 0);
+        if (GroupClient.state != null) GroupClient.state.currentProgress = progress;
         ClientVideoScreen screen = boundScreenOrWarn();
         if (screen == null) return;
-        ScreenControl.seek(screen, longValue(object, "progress", 0));
+        ScreenControl.seek(screen, progress);
+    }
+
+    private static void syncState(JsonObject object) {
+        GroupSyncManager.applySync(
+                longValue(object, "progress", 0),
+                object.has("paused") && object.get("paused").getAsBoolean(),
+                object.has("rate") ? object.get("rate").getAsFloat() : 1f,
+                longValue(object, "clientTime", System.currentTimeMillis())
+        );
     }
 
     private static void playNext(JsonObject object) {
@@ -158,7 +175,7 @@ public class GroupPacketHandler {
         if (screen == null || GroupClient.state == null || GroupClient.state.playlist == null) return;
         VideoInfo[] infos = GroupClient.state.playlist.stream()
                 .map(GroupPacketHandler::videoInfo)
-                .filter(info -> info != null)
+                .filter(Objects::nonNull)
                 .toArray(VideoInfo[]::new);
         ScreenControl.updatePlaylist(screen, infos);
     }
@@ -170,6 +187,7 @@ public class GroupPacketHandler {
     }
 
     private static void playBound(VideoInfo info, long progress) {
+        GroupSyncManager.setCurrentVideo(info, progress);
         ClientVideoScreen screen = boundScreenOrWarn();
         if (screen == null) return;
         ScreenControl.play(screen, info, progress);
