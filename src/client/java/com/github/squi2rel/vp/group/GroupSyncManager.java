@@ -43,6 +43,7 @@ public class GroupSyncManager {
         if (GroupClient.roomId == null || !GroupClient.connection.isConnected()) return;
         IVideoPlayer player = screen.player;
         if (player == null) return;
+        GroupClient.savePlaybackState(player);
         long now = System.currentTimeMillis();
         if (now - lastSyncSend < 1000) return;
         lastSyncSend = now;
@@ -62,6 +63,7 @@ public class GroupSyncManager {
         long now = System.currentTimeMillis();
         if (now - lastRestoreAttempt < 1000) return;
         lastRestoreAttempt = now;
+        GroupClient.showCurrentVideo(screen, GroupClient.state.currentVideo);
         ScreenControl.play(screen, GroupClient.state.currentVideo, currentProgress());
     }
 

@@ -203,6 +203,7 @@ public class GroupCommands {
                 return;
             }
             GroupSyncManager.setCurrentVideo(info, 0);
+            GroupClient.showCurrentVideo(screen, info);
             ScreenControl.play(screen, info, 0);
             JsonObject json = packet("play");
             JsonObject payload = payload(json);

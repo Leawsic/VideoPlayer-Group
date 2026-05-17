@@ -1,8 +1,10 @@
 package com.github.squi2rel.vp.group;
 
 import com.github.squi2rel.vp.VideoPlayerClient;
+import com.github.squi2rel.vp.provider.VideoInfo;
 import com.github.squi2rel.vp.video.ClientVideoArea;
 import com.github.squi2rel.vp.video.ClientVideoScreen;
+import com.github.squi2rel.vp.video.IVideoPlayer;
 import com.github.squi2rel.vp.video.ScreenControl;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -101,6 +103,7 @@ public class GroupClient {
 
     public static void suspendBecauseAreaUnloaded() {
         ClientVideoScreen screen = getBoundScreen();
+        savePlaybackState(screen);
         ScreenControl.stop(screen);
         suspended = true;
         suspendReason = "area_unloaded";
@@ -111,7 +114,8 @@ public class GroupClient {
         if (!suspended || roomId == null || state == null || state.currentVideo == null) return;
         ClientVideoScreen screen = getBoundScreen();
         if (screen == null) return;
-        long progress = latestSync == null ? state.currentProgress : estimateProgress(latestSync);
+        long progress = host || latestSync == null ? state.currentProgress : estimateProgress(latestSync);
+        showCurrentVideo(screen, state.currentVideo);
         ScreenControl.play(screen, state.currentVideo, progress);
         if (state.paused || latestSync != null && latestSync.paused) {
             ScreenControl.pause(screen, true, progress);
@@ -119,6 +123,26 @@ public class GroupClient {
         suspended = false;
         suspendReason = null;
         message("群组播放已恢复", Formatting.GREEN);
+    }
+
+    public static void showCurrentVideo(ClientVideoScreen screen, VideoInfo info) {
+        ScreenControl.updatePlaylist(screen, info == null ? new VideoInfo[0] : new VideoInfo[]{info});
+    }
+
+    public static void savePlaybackState(ClientVideoScreen screen) {
+        if (screen == null || screen.player == null) return;
+        savePlaybackState(screen.player);
+    }
+
+    public static void savePlaybackState(IVideoPlayer player) {
+        if (state == null || player == null) return;
+        long progress = player.getProgress();
+        if (progress >= 0) state.currentProgress = progress;
+        latestSync = new VideoInfoSync();
+        latestSync.progress = Math.max(state.currentProgress, 0);
+        latestSync.paused = player.isPaused();
+        latestSync.rate = 1f;
+        latestSync.clientTime = System.currentTimeMillis();
     }
 
     private static long estimateProgress(VideoInfoSync sync) {

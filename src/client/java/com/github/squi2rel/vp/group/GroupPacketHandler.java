@@ -129,6 +129,7 @@ public class GroupPacketHandler {
         }
         ClientVideoScreen screen = boundScreenOrWarn();
         if (screen == null) return;
+        GroupClient.showCurrentVideo(screen, null);
         ScreenControl.stop(screen);
     }
 
@@ -199,6 +200,7 @@ public class GroupPacketHandler {
         GroupSyncManager.setCurrentVideo(info, progress);
         ClientVideoScreen screen = boundScreenOrWarn();
         if (screen == null) return;
+        GroupClient.showCurrentVideo(screen, info);
         ScreenControl.play(screen, info, progress);
     }
 
