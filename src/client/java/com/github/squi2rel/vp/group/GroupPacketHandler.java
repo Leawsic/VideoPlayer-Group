@@ -1,5 +1,10 @@
 package com.github.squi2rel.vp.group;
 
+import com.github.squi2rel.vp.provider.NamedProviderSource;
+import com.github.squi2rel.vp.provider.VideoInfo;
+import com.github.squi2rel.vp.provider.VideoProviders;
+import com.github.squi2rel.vp.video.ClientVideoScreen;
+import com.github.squi2rel.vp.video.ScreenControl;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -9,6 +14,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import static com.github.squi2rel.vp.VideoPlayerMain.LOGGER;
@@ -28,6 +34,10 @@ public class GroupPacketHandler {
                 case "member_joined" -> memberJoined(object);
                 case "member_left" -> memberLeft(object);
                 case "room_disbanded" -> roomDisbanded(object);
+                case "play" -> play(object);
+                case "stop" -> stop();
+                case "pause" -> pause(object);
+                case "seek" -> seek(object);
                 case "error" -> error(object);
                 default -> LOGGER.info("Unknown group message type: {}", type);
             }
@@ -77,8 +87,66 @@ public class GroupPacketHandler {
         message("房间已解散", Formatting.YELLOW);
     }
 
+    private static void play(JsonObject object) {
+        if (!object.has("video") || !object.get("video").isJsonObject()) return;
+        VideoInfo info = gson.fromJson(object.get("video"), VideoInfo.class);
+        long progress = longValue(object, "progress", 0);
+        if (info.expire() > 0 && System.currentTimeMillis() > info.expire() && info.rawPath() != null && !info.rawPath().isEmpty()) {
+            CompletableFuture<VideoInfo> future = VideoProviders.from(info.rawPath(), new NamedProviderSource(info.playerName()));
+            if (future != null) {
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return future.get();
+                    } catch (Exception e) {
+                        LOGGER.error(e.toString());
+                        return null;
+                    }
+                }).thenAccept(resolved -> MinecraftClient.getInstance().execute(() -> playBound(resolved == null ? info : resolved, progress)));
+                return;
+            }
+        }
+        playBound(info, progress);
+    }
+
+    private static void stop() {
+        ClientVideoScreen screen = boundScreenOrWarn();
+        if (screen == null) return;
+        ScreenControl.stop(screen);
+    }
+
+    private static void pause(JsonObject object) {
+        ClientVideoScreen screen = boundScreenOrWarn();
+        if (screen == null) return;
+        boolean paused = !object.has("paused") || object.get("paused").getAsBoolean();
+        long progress = longValue(object, "progress", -1);
+        ScreenControl.pause(screen, paused, progress);
+    }
+
+    private static void seek(JsonObject object) {
+        ClientVideoScreen screen = boundScreenOrWarn();
+        if (screen == null) return;
+        ScreenControl.seek(screen, longValue(object, "progress", 0));
+    }
+
+    private static void playBound(VideoInfo info, long progress) {
+        ClientVideoScreen screen = boundScreenOrWarn();
+        if (screen == null) return;
+        ScreenControl.play(screen, info, progress);
+    }
+
+    private static ClientVideoScreen boundScreenOrWarn() {
+        ClientVideoScreen screen = GroupClient.getBoundScreen();
+        if (screen != null) return screen;
+        message("已收到群组播放，但未绑定屏幕", Formatting.YELLOW);
+        return null;
+    }
+
     private static void error(JsonObject object) {
         message("房间服务器错误: " + string(object, "message"), Formatting.RED);
+    }
+
+    private static long longValue(JsonObject object, String key, long fallback) {
+        return object.has(key) && !object.get(key).isJsonNull() ? object.get(key).getAsLong() : fallback;
     }
 
     private static String string(JsonObject object, String key) {
