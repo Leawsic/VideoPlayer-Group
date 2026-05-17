@@ -1,6 +1,7 @@
 package com.github.squi2rel.vp.local;
 
 import com.github.squi2rel.vp.VideoPlayerClient;
+import com.github.squi2rel.vp.group.GroupClient;
 import com.github.squi2rel.vp.video.ClientVideoArea;
 import com.github.squi2rel.vp.video.ClientVideoScreen;
 import com.google.gson.Gson;
@@ -137,11 +138,17 @@ public class LocalAreaManager {
         VideoPlayerClient.areas.put(runtimeName, area);
         loadedAreas.put(runtimeName, area);
         area.load();
+        if (GroupClient.suspended && Objects.equals(GroupClient.boundArea, runtimeName)) {
+            GroupClient.tryResumeFromRoomState();
+        }
     }
 
     private static void unloadArea(String runtimeName) {
         ClientVideoArea area = loadedAreas.remove(runtimeName);
         if (area == null) return;
+        if (Objects.equals(GroupClient.boundArea, runtimeName)) {
+            GroupClient.suspendBecauseAreaUnloaded();
+        }
         VideoPlayerClient.areas.remove(runtimeName);
         area.remove();
     }

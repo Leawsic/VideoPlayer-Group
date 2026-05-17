@@ -3,6 +3,10 @@ package com.github.squi2rel.vp.group;
 import com.github.squi2rel.vp.VideoPlayerClient;
 import com.github.squi2rel.vp.video.ClientVideoArea;
 import com.github.squi2rel.vp.video.ClientVideoScreen;
+import com.github.squi2rel.vp.video.ScreenControl;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 
 import java.util.ArrayList;
 
@@ -19,6 +23,8 @@ public class GroupClient {
     public static String boundArea;
     public static String boundScreen;
     public static VideoInfoSync latestSync;
+    public static boolean suspended;
+    public static String suspendReason;
 
     public static void updateState(GroupRoomState roomState, String playerUuid) {
         state = roomState;
@@ -59,6 +65,40 @@ public class GroupClient {
 
     public static boolean isBound() {
         return boundArea != null && boundScreen != null;
+    }
+
+    public static void suspendBecauseAreaUnloaded() {
+        ClientVideoScreen screen = getBoundScreen();
+        ScreenControl.stop(screen);
+        suspended = true;
+        suspendReason = "area_unloaded";
+        message("群组播放已因离开区域暂停", Formatting.YELLOW);
+    }
+
+    public static void tryResumeFromRoomState() {
+        if (!suspended || roomId == null || state == null || state.currentVideo == null) return;
+        ClientVideoScreen screen = getBoundScreen();
+        if (screen == null) return;
+        long progress = latestSync == null ? state.currentProgress : estimateProgress(latestSync);
+        ScreenControl.play(screen, state.currentVideo, progress);
+        if (state.paused || latestSync != null && latestSync.paused) {
+            ScreenControl.pause(screen, true, progress);
+        }
+        suspended = false;
+        suspendReason = null;
+        message("群组播放已恢复", Formatting.GREEN);
+    }
+
+    private static long estimateProgress(VideoInfoSync sync) {
+        if (sync.paused) return sync.progress;
+        return sync.progress + Math.max(System.currentTimeMillis() - sync.clientTime, 0);
+    }
+
+    private static void message(String text, Formatting formatting) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player != null) {
+            client.player.sendMessage(Text.literal(text).formatted(formatting), false);
+        }
     }
 
     public static class VideoInfoSync {
