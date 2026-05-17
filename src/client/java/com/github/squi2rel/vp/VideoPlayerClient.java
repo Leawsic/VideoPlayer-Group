@@ -625,6 +625,7 @@ public class VideoPlayerClient implements ClientModInitializer {
 
     public static void update() {
         if (updated) return;
+        LocalAreaManager.tick();
         for (ClientVideoScreen screen : screens) {
             if (screen.isPostUpdate()) continue;
             screen.swapTexture();
