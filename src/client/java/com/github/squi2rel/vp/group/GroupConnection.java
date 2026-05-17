@@ -74,7 +74,10 @@ public class GroupConnection implements WebSocket.Listener {
     public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
         connected = false;
         if (this.webSocket == webSocket) this.webSocket = null;
-        MinecraftClient.getInstance().execute(() -> message("已断开房间服务器连接", Formatting.YELLOW));
+        MinecraftClient.getInstance().execute(() -> {
+            GroupClient.clearRoom();
+            message("已断开房间服务器连接", Formatting.YELLOW);
+        });
         return null;
     }
 
@@ -83,7 +86,10 @@ public class GroupConnection implements WebSocket.Listener {
         connected = false;
         if (this.webSocket == webSocket) this.webSocket = null;
         LOGGER.error("Group connection error", error);
-        MinecraftClient.getInstance().execute(() -> message("房间服务器连接错误: " + error.getMessage(), Formatting.RED));
+        MinecraftClient.getInstance().execute(() -> {
+            GroupClient.clearRoom();
+            message("房间服务器连接错误: " + error.getMessage(), Formatting.RED);
+        });
     }
 
     private static void message(String text, Formatting formatting) {

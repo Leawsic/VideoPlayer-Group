@@ -37,6 +37,7 @@ public class GroupClient {
     }
 
     public static void clearRoom() {
+        stopBoundPlayback();
         roomId = null;
         roomName = null;
         hostUuid = null;
@@ -44,6 +45,13 @@ public class GroupClient {
         members = new ArrayList<>();
         state = null;
         lastSeq = 0;
+        latestSync = null;
+        suspended = false;
+        suspendReason = null;
+    }
+
+    public static void stopBoundPlayback() {
+        ScreenControl.stop(getBoundScreen());
     }
 
     public static void bind(String area, String screen) {
