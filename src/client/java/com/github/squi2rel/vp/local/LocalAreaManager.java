@@ -86,6 +86,19 @@ public class LocalAreaManager {
         return config;
     }
 
+    public static String getCurrentServerKey() {
+        return getServerKey(MinecraftClient.getInstance());
+    }
+
+    public static String getRuntimeName(String name) {
+        return "local:" + name;
+    }
+
+    public static void reloadArea(String name) {
+        unloadArea(getRuntimeName(name));
+        tick();
+    }
+
     public static void addArea(LocalAreaEntry area) {
         if (area == null) return;
         removeArea(area.name);
@@ -94,7 +107,7 @@ public class LocalAreaManager {
     }
 
     public static void removeArea(String name) {
-        String runtimeName = "local:" + name;
+        String runtimeName = getRuntimeName(name);
         unloadArea(runtimeName);
         config.areas.removeIf(area -> Objects.equals(area.name, name));
         save();

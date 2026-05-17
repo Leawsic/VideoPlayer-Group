@@ -1,5 +1,6 @@
 package com.github.squi2rel.vp;
 
+import com.github.squi2rel.vp.local.LocalAreaCommands;
 import com.github.squi2rel.vp.local.LocalAreaManager;
 import com.github.squi2rel.vp.network.PacketID;
 import com.github.squi2rel.vp.network.VideoPayload;
@@ -147,6 +148,7 @@ public class VideoPlayerClient implements ClientModInitializer {
             });
         });
         ClientCommandRegistrationCallback.EVENT.register((d, c) -> d.register(ClientCommandManager.literal("vlc")
+                .then(LocalAreaCommands.register())
                 .then(ClientCommandManager.literal("play")
                         .then(ClientCommandManager.argument("url", StringArgumentType.greedyString())
                                 .executes(s -> {
