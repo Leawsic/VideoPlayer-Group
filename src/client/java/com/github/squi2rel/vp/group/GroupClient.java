@@ -4,6 +4,8 @@ import com.github.squi2rel.vp.VideoPlayerClient;
 import com.github.squi2rel.vp.video.ClientVideoArea;
 import com.github.squi2rel.vp.video.ClientVideoScreen;
 import com.github.squi2rel.vp.video.ScreenControl;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -11,7 +13,9 @@ import net.minecraft.util.Formatting;
 import java.util.ArrayList;
 
 public class GroupClient {
+    private static final Gson gson = new Gson();
     public static final GroupConnection connection = new GroupConnection();
+    private static long seq;
 
     public static String roomId;
     public static String roomName;
@@ -34,6 +38,26 @@ public class GroupClient {
         members = roomState.members == null ? new ArrayList<>() : roomState.members;
         lastSeq = roomState.seq;
         host = hostUuid != null && hostUuid.equals(playerUuid);
+    }
+
+    public static JsonObject packet(String type) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", type);
+        json.addProperty("seq", ++seq);
+        json.add("payload", new JsonObject());
+        return json;
+    }
+
+    public static JsonObject payload(JsonObject packet) {
+        return packet.getAsJsonObject("payload");
+    }
+
+    public static void send(JsonObject packet) {
+        connection.send(gson.toJson(packet));
+    }
+
+    public static void resetSeq() {
+        seq = 0;
     }
 
     public static void clearRoom() {

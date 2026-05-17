@@ -29,20 +29,22 @@ public class GroupPacketHandler {
         try {
             JsonObject object = JsonParser.parseString(json).getAsJsonObject();
             String type = string(object, "type");
+            JsonObject payload = payload(object);
             switch (type) {
-                case "room_created" -> roomCreated(object);
-                case "room_list" -> roomList(object);
-                case "room_state" -> roomState(object);
-                case "member_joined" -> memberJoined(object);
-                case "member_left" -> memberLeft(object);
-                case "room_disbanded" -> roomDisbanded(object);
-                case "play" -> play(object);
+                case "hello_ack" -> helloAck();
+                case "room_created" -> roomCreated(payload);
+                case "room_list" -> roomList(payload);
+                case "room_state" -> roomState(payload, object);
+                case "member_joined" -> memberJoined(payload);
+                case "member_left" -> memberLeft(payload);
+                case "room_disbanded" -> roomDisbanded(payload);
+                case "play" -> play(payload);
                 case "stop" -> stop();
-                case "pause" -> pause(object);
-                case "seek" -> seek(object);
-                case "sync_state" -> syncState(object);
-                case "playlist_update" -> playlistUpdate(object);
-                case "skip", "play_next" -> playNext(object);
+                case "pause" -> pause(payload);
+                case "seek" -> seek(payload);
+                case "sync_state" -> syncState(payload);
+                case "playlist_update" -> playlistUpdate(payload);
+                case "skip", "play_next" -> playNext(payload);
                 case "error" -> error(object);
                 default -> LOGGER.info("Unknown group message type: {}", type);
             }
@@ -52,8 +54,12 @@ public class GroupPacketHandler {
         }
     }
 
+    private static void helloAck() {
+        message("房间服务器握手成功", Formatting.GREEN);
+    }
+
     private static void roomCreated(JsonObject object) {
-        message("房间已创建: " + string(object, "roomName") + " (" + string(object, "roomId") + ")", Formatting.GREEN);
+        message("房间已创建: " + stringValue(object, "name", "roomName") + " (" + string(object, "roomId") + ")", Formatting.GREEN);
     }
 
     private static void roomList(JsonObject object) {
@@ -65,15 +71,18 @@ public class GroupPacketHandler {
         String text = rooms.asList().stream()
                 .filter(JsonElement::isJsonObject)
                 .map(JsonElement::getAsJsonObject)
-                .map(room -> "%s - %s".formatted(string(room, "roomId"), string(room, "roomName")))
+                .map(room -> "%s - %s".formatted(string(room, "roomId"), stringValue(room, "name", "roomName")))
                 .collect(Collectors.joining("\n"));
         message("房间列表:\n" + text, Formatting.GOLD);
     }
 
-    private static void roomState(JsonObject object) {
+    private static void roomState(JsonObject object, JsonObject envelope) {
         GroupRoomState state = object.has("state") && object.get("state").isJsonObject()
                 ? gson.fromJson(object.get("state"), GroupRoomState.class)
                 : gson.fromJson(object, GroupRoomState.class);
+        if (state.roomName == null || state.roomName.isEmpty()) state.roomName = stringValue(object, "name", "roomName");
+        if (state.currentProgress == 0) state.currentProgress = longValue(object, "progress", 0);
+        if (state.seq == 0) state.seq = longValue(envelope, "seq", 0);
         MinecraftClient client = MinecraftClient.getInstance();
         GroupClient.updateState(state, client.player == null ? "" : client.player.getUuidAsString());
         message("已更新房间状态: " + GroupClient.roomName + "，成员 " + GroupClient.members.size() + " 人", Formatting.GREEN);
@@ -201,7 +210,14 @@ public class GroupPacketHandler {
     }
 
     private static void error(JsonObject object) {
-        message("房间服务器错误: " + string(object, "message"), Formatting.RED);
+        JsonObject payload = object.has("payload") && object.get("payload").isJsonObject() ? object.getAsJsonObject("payload") : object;
+        String code = string(payload, "code");
+        String text = string(payload, "message");
+        message("房间服务器错误: " + (code.isEmpty() ? "" : code + " ") + text, Formatting.RED);
+    }
+
+    private static JsonObject payload(JsonObject object) {
+        return object.has("payload") && object.get("payload").isJsonObject() ? object.getAsJsonObject("payload") : object;
     }
 
     private static long longValue(JsonObject object, String key, long fallback) {
@@ -210,6 +226,14 @@ public class GroupPacketHandler {
 
     private static String string(JsonObject object, String key) {
         return object.has(key) && !object.get(key).isJsonNull() ? object.get(key).getAsString() : "";
+    }
+
+    private static String stringValue(JsonObject object, String... keys) {
+        for (String key : keys) {
+            String value = string(object, key);
+            if (!value.isEmpty()) return value;
+        }
+        return "";
     }
 
     private static void message(String text, Formatting formatting) {

@@ -5,11 +5,9 @@ import com.github.squi2rel.vp.video.ClientVideoScreen;
 import com.github.squi2rel.vp.video.IVideoPlayer;
 import com.github.squi2rel.vp.video.ScreenControl;
 import com.github.squi2rel.vp.video.VideoPlayer;
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
 public class GroupSyncManager {
-    private static final Gson gson = new Gson();
     private static long lastSyncSend;
     private static long lastRestoreAttempt;
 
@@ -49,13 +47,13 @@ public class GroupSyncManager {
         if (now - lastSyncSend < 1000) return;
         lastSyncSend = now;
 
-        JsonObject json = new JsonObject();
-        json.addProperty("type", "sync_state");
-        json.addProperty("progress", player.getProgress());
-        json.addProperty("paused", player.isPaused());
-        json.addProperty("rate", player instanceof VideoPlayer vp ? vp.getRate() : 1f);
-        json.addProperty("clientTime", now);
-        GroupClient.connection.send(gson.toJson(json));
+        JsonObject json = GroupClient.packet("sync_state");
+        JsonObject payload = GroupClient.payload(json);
+        payload.addProperty("progress", player.getProgress());
+        payload.addProperty("paused", player.isPaused());
+        payload.addProperty("rate", player instanceof VideoPlayer vp ? vp.getRate() : 1f);
+        payload.addProperty("clientTime", now);
+        GroupClient.send(json);
     }
 
     private static void restorePlayback(ClientVideoScreen screen) {

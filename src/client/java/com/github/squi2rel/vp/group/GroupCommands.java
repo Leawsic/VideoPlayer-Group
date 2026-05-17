@@ -51,9 +51,8 @@ public class GroupCommands {
                 .then(ClientCommandManager.literal("disband")
                         .executes(s -> disband(s.getSource())))
                 .then(ClientCommandManager.literal("bind")
-                        .then(ClientCommandManager.argument("area", StringArgumentType.string())
-                                .then(ClientCommandManager.argument("screen", StringArgumentType.string())
-                                        .executes(s -> bind(s.getSource(), s.getArgument("area", String.class), s.getArgument("screen", String.class))))))
+                        .then(ClientCommandManager.argument("target", StringArgumentType.greedyString())
+                                .executes(s -> bind(s.getSource(), s.getArgument("target", String.class)))))
                 .then(ClientCommandManager.literal("unbind")
                         .executes(s -> unbind(s.getSource())))
                 .then(ClientCommandManager.literal("play")
@@ -84,6 +83,7 @@ public class GroupCommands {
 
     private static int connect(FabricClientCommandSource source, String url) {
         try {
+            GroupClient.resetSeq();
             GroupClient.connection.connect(URI.create(url), createHello());
             source.sendFeedback(Text.literal("正在连接房间服务器...").formatted(Formatting.YELLOW));
             return Command.SINGLE_SUCCESS;
@@ -110,7 +110,7 @@ public class GroupCommands {
     private static int create(FabricClientCommandSource source, String name) {
         if (!checkConnected(source)) return 0;
         JsonObject json = packet("room_create");
-        json.addProperty("name", name);
+        payload(json).addProperty("name", name);
         send(json);
         source.sendFeedback(Text.literal("已发送创建房间请求").formatted(Formatting.GREEN));
         return Command.SINGLE_SUCCESS;
@@ -126,7 +126,7 @@ public class GroupCommands {
     private static int join(FabricClientCommandSource source, String roomId) {
         if (!checkConnected(source)) return 0;
         JsonObject json = packet("room_join");
-        json.addProperty("roomId", roomId);
+        payload(json).addProperty("roomId", roomId);
         send(json);
         source.sendFeedback(Text.literal("已发送加入房间请求").formatted(Formatting.GREEN));
         return Command.SINGLE_SUCCESS;
@@ -147,15 +147,26 @@ public class GroupCommands {
         return Command.SINGLE_SUCCESS;
     }
 
-    private static int bind(FabricClientCommandSource source, String areaName, String screenName) {
-        GroupClient.bind(areaName, screenName);
-        if (GroupClient.getBoundScreen() == null) {
+    private static int bind(FabricClientCommandSource source, String target) {
+        String[] parts = target.trim().split("\\s+", 2);
+        if (parts.length < 2) {
+            source.sendFeedback(Text.literal("用法: /vlc group bind <area> <screen>").formatted(Formatting.RED));
+            return 0;
+        }
+        String areaName = parts[0];
+        String screenName = parts[1];
+        if (!bindScreen(areaName, screenName) && !areaName.startsWith("local:") && !bindScreen("local:" + areaName, screenName)) {
             GroupClient.unbind();
             source.sendFeedback(Text.literal("绑定失败：区域或屏幕不存在，或区域尚未加载").formatted(Formatting.RED));
             return 0;
         }
-        source.sendFeedback(Text.literal("已绑定群组屏幕: " + areaName + " / " + screenName).formatted(Formatting.GREEN));
+        source.sendFeedback(Text.literal("已绑定群组屏幕: " + GroupClient.boundArea + " / " + GroupClient.boundScreen).formatted(Formatting.GREEN));
         return Command.SINGLE_SUCCESS;
+    }
+
+    private static boolean bindScreen(String areaName, String screenName) {
+        GroupClient.bind(areaName, screenName);
+        return GroupClient.getBoundScreen() != null;
     }
 
     private static int unbind(FabricClientCommandSource source) {
@@ -194,8 +205,9 @@ public class GroupCommands {
             GroupSyncManager.setCurrentVideo(info, 0);
             ScreenControl.play(screen, info, 0);
             JsonObject json = packet("play");
-            json.add("video", gson.toJsonTree(info));
-            json.addProperty("progress", 0);
+            JsonObject payload = payload(json);
+            payload.add("video", gson.toJsonTree(info));
+            payload.addProperty("progress", 0);
             send(json);
             source.sendFeedback(Text.literal("已发送群组播放").formatted(Formatting.GREEN));
         }));
@@ -213,7 +225,9 @@ public class GroupCommands {
     private static int pause(FabricClientCommandSource source) {
         if (!checkPlaybackReady(source)) return 0;
         ScreenControl.pause(GroupClient.getBoundScreen(), true, -1);
-        send(packet("pause"));
+        JsonObject json = packet("pause");
+        payload(json).addProperty("paused", true);
+        send(json);
         source.sendFeedback(Text.literal("已发送群组暂停").formatted(Formatting.GREEN));
         return Command.SINGLE_SUCCESS;
     }
@@ -222,7 +236,7 @@ public class GroupCommands {
         if (!checkPlaybackReady(source)) return 0;
         ScreenControl.pause(GroupClient.getBoundScreen(), false, -1);
         JsonObject json = packet("pause");
-        json.addProperty("paused", false);
+        payload(json).addProperty("paused", false);
         send(json);
         source.sendFeedback(Text.literal("已发送群组继续播放").formatted(Formatting.GREEN));
         return Command.SINGLE_SUCCESS;
@@ -233,7 +247,7 @@ public class GroupCommands {
         long progress = (long) (seconds * 1000);
         ScreenControl.seek(GroupClient.getBoundScreen(), progress);
         JsonObject json = packet("seek");
-        json.addProperty("progress", progress);
+        payload(json).addProperty("progress", progress);
         send(json);
         source.sendFeedback(Text.literal("已发送群组跳转到 " + seconds + " 秒").formatted(Formatting.GREEN));
         return Command.SINGLE_SUCCESS;
@@ -262,8 +276,9 @@ public class GroupCommands {
                 return;
             }
             JsonObject json = packet("queue_add");
-            json.addProperty("url", url);
-            json.add("video", gson.toJsonTree(info));
+            JsonObject payload = payload(json);
+            payload.addProperty("url", url);
+            payload.add("video", gson.toJsonTree(info));
             send(json);
             source.sendFeedback(Text.literal("已发送加入群组队列请求").formatted(Formatting.GREEN));
         }));
@@ -337,23 +352,26 @@ public class GroupCommands {
     }
 
     private static void send(JsonObject json) {
-        GroupClient.connection.send(gson.toJson(json));
+        GroupClient.send(json);
     }
 
     private static JsonObject packet(String type) {
-        JsonObject json = new JsonObject();
-        json.addProperty("type", type);
-        return json;
+        return GroupClient.packet(type);
+    }
+
+    private static JsonObject payload(JsonObject packet) {
+        return GroupClient.payload(packet);
     }
 
     private static String createHello() {
         MinecraftClient client = MinecraftClient.getInstance();
-        JsonObject json = new JsonObject();
+        JsonObject json = packet("hello");
         json.addProperty("protocol", 1);
-        json.addProperty("playerUuid", client.player == null ? "" : client.player.getUuidAsString());
-        json.addProperty("playerName", client.player == null ? "" : client.player.getName().getString());
-        json.addProperty("minecraftServer", getServerKey(client));
-        json.addProperty("modVersion", VideoPlayerMain.version);
+        JsonObject payload = payload(json);
+        payload.addProperty("playerUuid", client.player == null ? "" : client.player.getUuidAsString());
+        payload.addProperty("playerName", client.player == null ? "" : client.player.getName().getString());
+        payload.addProperty("minecraftServer", getServerKey(client));
+        payload.addProperty("modVersion", VideoPlayerMain.version);
         return gson.toJson(json);
     }
 
