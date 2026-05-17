@@ -95,6 +95,10 @@ public class LocalAreaManager {
         return "local:" + name;
     }
 
+    public static boolean isLoaded(String name) {
+        return loadedAreas.containsKey(getRuntimeName(name));
+    }
+
     public static void reloadArea(String name) {
         unloadArea(getRuntimeName(name));
         tick();

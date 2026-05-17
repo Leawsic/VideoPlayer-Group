@@ -129,7 +129,7 @@ public class GroupClient {
     private static void message(String text, Formatting formatting) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player != null) {
-            client.player.sendMessage(Text.literal(text).formatted(formatting), false);
+            client.player.sendMessage(Text.literal(text).formatted(formatting), true);
         }
     }
 
