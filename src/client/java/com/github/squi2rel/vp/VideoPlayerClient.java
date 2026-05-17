@@ -1,5 +1,6 @@
 package com.github.squi2rel.vp;
 
+import com.github.squi2rel.vp.local.LocalAreaManager;
 import com.github.squi2rel.vp.network.PacketID;
 import com.github.squi2rel.vp.network.VideoPayload;
 import com.github.squi2rel.vp.provider.VideoInfo;
@@ -112,6 +113,7 @@ public class VideoPlayerClient implements ClientModInitializer {
         }
         VlcDecoder.load();
         loadConfig();
+        LocalAreaManager.init();
         VideoProviders.register();
         disconnectHandler = () -> client.execute(() -> {
             connected = false;
