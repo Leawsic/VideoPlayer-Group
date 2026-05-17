@@ -1,0 +1,45 @@
+{
+	"schemaVersion": 1,
+	"id": "videoplayer",
+	"version": "${version}",
+	"name": "VideoPlayer-Group",
+	"description": "Player video in-game using VLC library (with group client)",
+	"authors": [
+		"squi2rel",
+        "Leawsic"
+	],
+	"contact": {
+		"sources": "https://github.com/Leawsic/VideoPlayer-Group"
+	},
+	"license": "GPL-3.0",
+	"icon": "assets/videoplayer/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+          "com.github.squi2rel.vp.VideoPlayerMain"
+		],
+		"client": [
+			"com.github.squi2rel.vp.VideoPlayerClient"
+		]
+	},
+	"mixins": [
+		"videoplayer.mixins.json",
+		{
+			"config": "videoplayer.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.16.14",
+		"minecraft": "~1.20.1",
+		"java": ">=17",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"vivecraft": ">=1.3.0"
+	},
+	"breaks": {
+		"vivecraft": "<1.3.0"
+	},
+	"accessWidener": "videoplayer.accesswidener"
+}
