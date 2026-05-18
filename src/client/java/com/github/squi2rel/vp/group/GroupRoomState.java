@@ -13,5 +13,6 @@ public class GroupRoomState {
     public VideoInfo currentVideo;
     public long currentProgress;
     public boolean paused;
+    public ScreenDescriptor hostScreen;
     public long seq;
 }

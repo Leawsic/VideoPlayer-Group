@@ -35,6 +35,8 @@ public class GroupPacketHandler {
                 case "room_created" -> roomCreated(payload);
                 case "room_list" -> roomList(payload);
                 case "room_state" -> roomState(payload, object);
+                case "screen_bound" -> screenBound(payload);
+                case "screen_unbound" -> screenUnbound();
                 case "member_joined" -> memberJoined(payload);
                 case "member_left" -> memberLeft(payload);
                 case "room_disbanded" -> roomDisbanded(payload);
@@ -85,15 +87,31 @@ public class GroupPacketHandler {
         if (state.seq == 0) state.seq = longValue(envelope, "seq", 0);
         MinecraftClient client = MinecraftClient.getInstance();
         GroupClient.updateState(state, client.player == null ? "" : client.player.getUuidAsString());
+        if (state.hostScreen != null) {
+            GroupClient.onHostScreenReceived(state.hostScreen);
+        } else if (GroupClient.usingHostScreen) {
+            GroupClient.onHostScreenUnbound();
+        }
         message("已更新房间状态: " + GroupClient.roomName + "，成员 " + GroupClient.members.size() + " 人", Formatting.GREEN);
     }
 
+    private static void screenBound(JsonObject object) {
+        ScreenDescriptor screen = screenDescriptor(object);
+        if (screen == null) return;
+        if (GroupClient.state != null) GroupClient.state.hostScreen = screen;
+        GroupClient.onHostScreenReceived(screen);
+    }
+
+    private static void screenUnbound() {
+        GroupClient.onHostScreenUnbound();
+    }
+
     private static void memberJoined(JsonObject object) {
-        message("成员加入房间: " + string(object, "playerName"), Formatting.GREEN);
+        message("成员加入房间: " + string(object, "name"), Formatting.GREEN);
     }
 
     private static void memberLeft(JsonObject object) {
-        message("成员离开房间: " + string(object, "playerName"), Formatting.YELLOW);
+        message("成员离开房间: " + string(object, "name"), Formatting.YELLOW);
     }
 
     private static void roomDisbanded(JsonObject object) {
@@ -216,6 +234,16 @@ public class GroupPacketHandler {
         String code = string(payload, "code");
         String text = string(payload, "message");
         message("房间服务器错误: " + (code.isEmpty() ? "" : code + " ") + text, Formatting.RED);
+    }
+
+    private static ScreenDescriptor screenDescriptor(JsonObject object) {
+        if (object.has("screen") && object.get("screen").isJsonObject()) {
+            return gson.fromJson(object.get("screen"), ScreenDescriptor.class);
+        }
+        if (object.has("hostScreen") && object.get("hostScreen").isJsonObject()) {
+            return gson.fromJson(object.get("hostScreen"), ScreenDescriptor.class);
+        }
+        return object.isJsonObject() && object.has("areaName") ? gson.fromJson(object, ScreenDescriptor.class) : null;
     }
 
     private static JsonObject payload(JsonObject object) {

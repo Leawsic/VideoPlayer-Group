@@ -48,7 +48,7 @@ public class LocalAreaManager {
             boolean loaded = loadedAreas.containsKey(runtimeName);
             if (shouldLoad && !loaded) {
                 loadArea(entry, runtimeName);
-            } else if (!shouldLoad && loaded) {
+            } else if (!shouldLoad && loaded && !GroupClient.shouldKeepLocalAreaLoaded(runtimeName)) {
                 unloadArea(runtimeName);
             }
         }

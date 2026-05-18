@@ -10,6 +10,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.FloatArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
@@ -55,6 +56,9 @@ public class GroupCommands {
                                 .executes(s -> bind(s.getSource(), s.getArgument("target", String.class)))))
                 .then(ClientCommandManager.literal("unbind")
                         .executes(s -> unbind(s.getSource())))
+                .then(ClientCommandManager.literal("bind-option")
+                        .then(ClientCommandManager.argument("id", IntegerArgumentType.integer(1))
+                                .executes(s -> bindOption(s.getSource(), s.getArgument("id", Integer.class)))))
                 .then(ClientCommandManager.literal("play")
                         .then(ClientCommandManager.argument("url", StringArgumentType.greedyString())
                                 .executes(s -> play(s.getSource(), s.getArgument("url", String.class)))))
@@ -160,6 +164,7 @@ public class GroupCommands {
             source.sendFeedback(Text.literal("绑定失败：区域或屏幕不存在，或区域尚未加载").formatted(Formatting.RED));
             return 0;
         }
+        GroupClient.sendBoundScreenToServer();
         source.sendFeedback(Text.literal("已绑定群组屏幕: " + GroupClient.boundArea + " / " + GroupClient.boundScreen).formatted(Formatting.GREEN));
         return Command.SINGLE_SUCCESS;
     }
@@ -170,8 +175,20 @@ public class GroupCommands {
     }
 
     private static int unbind(FabricClientCommandSource source) {
+        GroupClient.sendScreenUnbindToServer();
+        GroupClient.removeHostRuntimeArea();
         GroupClient.unbind();
         source.sendFeedback(Text.literal("已取消群组屏幕绑定").formatted(Formatting.YELLOW));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int bindOption(FabricClientCommandSource source, int id) {
+        if (!checkRoomReady(source)) return 0;
+        if (!GroupClient.bindOption(id)) {
+            source.sendFeedback(Text.literal("绑定选项不存在或已过期").formatted(Formatting.RED));
+            return 0;
+        }
+        source.sendFeedback(Text.literal("已绑定群组屏幕: " + GroupClient.boundArea + " / " + GroupClient.boundScreen).formatted(Formatting.GREEN));
         return Command.SINGLE_SUCCESS;
     }
 
