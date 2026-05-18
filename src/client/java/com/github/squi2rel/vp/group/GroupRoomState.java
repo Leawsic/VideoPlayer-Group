@@ -8,6 +8,7 @@ public class GroupRoomState {
     public String roomId;
     public String roomName;
     public String hostUuid;
+    public String hostName;
     public ArrayList<GroupMember> members = new ArrayList<>();
     public ArrayList<GroupPlaylistItem> playlist = new ArrayList<>();
     public VideoInfo currentVideo;

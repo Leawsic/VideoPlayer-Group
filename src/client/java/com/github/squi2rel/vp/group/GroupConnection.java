@@ -14,6 +14,7 @@ import static com.github.squi2rel.vp.VideoPlayerMain.LOGGER;
 public class GroupConnection implements WebSocket.Listener {
     private final HttpClient client = HttpClient.newHttpClient();
     private WebSocket webSocket;
+    private final StringBuilder incomingText = new StringBuilder();
     private volatile boolean connected;
     private String helloJson;
 
@@ -37,6 +38,7 @@ public class GroupConnection implements WebSocket.Listener {
         }
         webSocket = null;
         connected = false;
+        incomingText.setLength(0);
     }
 
     public void send(String json) {
@@ -62,8 +64,10 @@ public class GroupConnection implements WebSocket.Listener {
 
     @Override
     public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+        incomingText.append(data);
         if (last) {
-            String json = data.toString();
+            String json = incomingText.toString();
+            incomingText.setLength(0);
             MinecraftClient.getInstance().execute(() -> GroupPacketHandler.handle(json));
         }
         webSocket.request(1);
@@ -73,6 +77,7 @@ public class GroupConnection implements WebSocket.Listener {
     @Override
     public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
         connected = false;
+        incomingText.setLength(0);
         if (this.webSocket == webSocket) this.webSocket = null;
         MinecraftClient.getInstance().execute(() -> {
             GroupClient.clearRoom();
@@ -84,6 +89,7 @@ public class GroupConnection implements WebSocket.Listener {
     @Override
     public void onError(WebSocket webSocket, Throwable error) {
         connected = false;
+        incomingText.setLength(0);
         if (this.webSocket == webSocket) this.webSocket = null;
         LOGGER.error("Group connection error", error);
         MinecraftClient.getInstance().execute(() -> {

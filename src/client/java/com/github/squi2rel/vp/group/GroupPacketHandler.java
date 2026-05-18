@@ -84,6 +84,7 @@ public class GroupPacketHandler {
                 ? gson.fromJson(object.get("state"), GroupRoomState.class)
                 : gson.fromJson(object, GroupRoomState.class);
         if (state.roomName == null || state.roomName.isEmpty()) state.roomName = stringValue(object, "name", "roomName");
+        if (state.hostName == null || state.hostName.isEmpty()) state.hostName = string(object, "hostName");
         if (state.currentProgress == 0) state.currentProgress = longValue(object, "progress", 0);
         if (state.seq == 0) state.seq = longValue(envelope, "seq", 0);
         MinecraftClient client = MinecraftClient.getInstance();
@@ -264,6 +265,11 @@ public class GroupPacketHandler {
         if (!hostUuid.isEmpty()) {
             GroupClient.hostUuid = hostUuid;
             if (GroupClient.state != null) GroupClient.state.hostUuid = hostUuid;
+        }
+        String hostName = string(room, "hostName");
+        if (!hostName.isEmpty()) {
+            GroupClient.hostName = hostName;
+            if (GroupClient.state != null) GroupClient.state.hostName = hostName;
         }
         GroupClient.syncMemberCount(intValue(room, "members", -1));
     }

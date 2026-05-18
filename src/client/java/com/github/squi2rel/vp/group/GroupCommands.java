@@ -339,7 +339,7 @@ public class GroupCommands {
         source.sendFeedback(Text.literal("房间: %s (%s)\n房主: %s%s\n成员: %d\n序号: %d\n绑定屏幕: %s%s".formatted(
                 GroupClient.roomName,
                 GroupClient.roomId,
-                GroupClient.hostUuid,
+                GroupClient.getHostDisplayName(),
                 GroupClient.host ? "（你是房主）" : "",
                 GroupClient.getMemberCount(),
                 GroupClient.lastSeq,

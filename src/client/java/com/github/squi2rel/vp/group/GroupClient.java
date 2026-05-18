@@ -30,6 +30,7 @@ public class GroupClient {
     public static String roomId;
     public static String roomName;
     public static String hostUuid;
+    public static String hostName;
     public static boolean host;
     public static ArrayList<GroupMember> members = new ArrayList<>();
     public static int memberCount;
@@ -49,6 +50,7 @@ public class GroupClient {
         roomId = roomState.roomId;
         roomName = roomState.roomName;
         hostUuid = roomState.hostUuid;
+        hostName = roomState.hostName;
         members = roomState.members == null ? new ArrayList<>() : roomState.members;
         memberCount = members.size();
         hostScreen = roomState.hostScreen;
@@ -82,6 +84,7 @@ public class GroupClient {
         roomId = null;
         roomName = null;
         hostUuid = null;
+        hostName = null;
         host = false;
         members = new ArrayList<>();
         memberCount = 0;
@@ -161,6 +164,10 @@ public class GroupClient {
 
     public static int getMemberCount() {
         return Math.max(memberCount, members.size());
+    }
+
+    public static String getHostDisplayName() {
+        return hostName == null || hostName.isEmpty() ? hostUuid : hostName;
     }
 
     public static void sendBoundScreenToServer() {
