@@ -48,7 +48,7 @@ public class LocalAreaManager {
             boolean loaded = loadedAreas.containsKey(runtimeName);
             if (shouldLoad && !loaded) {
                 loadArea(entry, runtimeName);
-            } else if (!shouldLoad && loaded && !GroupClient.shouldKeepLocalAreaLoaded(runtimeName)) {
+            } else if (!shouldLoad && loaded) {
                 unloadArea(runtimeName);
             }
         }
@@ -142,8 +142,8 @@ public class LocalAreaManager {
         VideoPlayerClient.areas.put(runtimeName, area);
         loadedAreas.put(runtimeName, area);
         area.load();
-        if (GroupClient.suspended && Objects.equals(GroupClient.boundArea, runtimeName)) {
-            GroupClient.tryResumeFromRoomState();
+        if (Objects.equals(GroupClient.boundArea, runtimeName)) {
+            GroupClient.onBoundAreaLoaded();
         }
     }
 
@@ -151,7 +151,7 @@ public class LocalAreaManager {
         ClientVideoArea area = loadedAreas.remove(runtimeName);
         if (area == null) return;
         if (Objects.equals(GroupClient.boundArea, runtimeName)) {
-            GroupClient.suspendBecauseAreaUnloaded();
+            GroupClient.onBoundAreaUnloaded(runtimeName);
         }
         VideoPlayerClient.areas.remove(runtimeName);
         area.remove();

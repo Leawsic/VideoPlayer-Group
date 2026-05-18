@@ -135,7 +135,41 @@ public class GroupClient {
     }
 
     public static boolean shouldKeepLocalAreaLoaded(String runtimeAreaName) {
-        return isInRoom() && isBoundToArea(runtimeAreaName) && runtimeAreaName.startsWith("local:");
+        return false;
+    }
+
+    public static boolean isBoundAreaLoaded() {
+        if (!isBound()) return false;
+        ClientVideoArea area = VideoPlayerClient.areas.get(boundArea);
+        return area != null && area.loaded;
+    }
+
+    public static boolean hasPlayableBoundScreen() {
+        return getBoundScreen() != null;
+    }
+
+    public static boolean hasLocalPlayer() {
+        ClientVideoScreen screen = getBoundScreen();
+        return screen != null && screen.player != null;
+    }
+
+    public static void requestRoomState() {
+        if (!isInRoom() || !connection.isConnected()) return;
+        send(packet("room_state_request"));
+    }
+
+    public static void onBoundAreaLoaded() {
+        if (!isInRoom() || !isBound()) return;
+        suspended = false;
+        suspendReason = null;
+        requestRoomState();
+        restoreCurrentVideoToBoundScreen();
+    }
+
+    public static void onBoundAreaUnloaded(String runtimeAreaName) {
+        if (!isBoundToArea(runtimeAreaName)) return;
+        suspended = true;
+        suspendReason = "area_unloaded";
     }
 
     public static void upsertMember(String uuid, String name) {
@@ -223,6 +257,7 @@ public class GroupClient {
     public static boolean bindHostScreen() {
         if (hostScreen == null || roomId == null) return false;
         createRuntimeAreaFromHostScreen(hostScreen);
+        requestRoomState();
         restoreCurrentVideoToBoundScreen();
         return true;
     }
@@ -293,6 +328,7 @@ public class GroupClient {
             bindHostScreen();
         } else {
             bind(option.area, option.screen);
+            requestRoomState();
             restoreCurrentVideoToBoundScreen();
         }
         return true;
@@ -302,10 +338,10 @@ public class GroupClient {
         if (state == null || state.currentVideo == null) return;
         ClientVideoScreen screen = getBoundScreen();
         if (screen == null) return;
-        long progress = host || latestSync == null ? state.currentProgress : estimateProgress(latestSync);
+        long progress = state.estimateProgress();
         showCurrentVideo(screen, state.currentVideo);
         ScreenControl.play(screen, state.currentVideo, progress);
-        if (state.paused || latestSync != null && latestSync.paused) {
+        if (state.paused) {
             ScreenControl.pause(screen, true, progress);
         }
     }
@@ -320,20 +356,11 @@ public class GroupClient {
     }
 
     public static void suspendBecauseAreaUnloaded() {
-        ClientVideoScreen screen = getBoundScreen();
-        savePlaybackState(screen);
-        ScreenControl.stop(screen);
-        suspended = true;
-        suspendReason = "area_unloaded";
-        message("群组播放已因离开区域暂停", Formatting.YELLOW);
+        if (boundArea != null) onBoundAreaUnloaded(boundArea);
     }
 
     public static void tryResumeFromRoomState() {
-        if (!suspended || roomId == null || state == null || state.currentVideo == null) return;
-        restoreCurrentVideoToBoundScreen();
-        suspended = false;
-        suspendReason = null;
-        message("群组播放已恢复", Formatting.GREEN);
+        onBoundAreaLoaded();
     }
 
     public static void showCurrentVideo(ClientVideoScreen screen, VideoInfo info) {

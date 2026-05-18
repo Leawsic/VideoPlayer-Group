@@ -83,9 +83,10 @@ public class GroupPacketHandler {
         GroupRoomState state = object.has("state") && object.get("state").isJsonObject()
                 ? gson.fromJson(object.get("state"), GroupRoomState.class)
                 : gson.fromJson(object, GroupRoomState.class);
+        JsonObject stateObject = object.has("state") && object.get("state").isJsonObject() ? object.getAsJsonObject("state") : object;
         if (state.roomName == null || state.roomName.isEmpty()) state.roomName = stringValue(object, "name", "roomName");
         if (state.hostName == null || state.hostName.isEmpty()) state.hostName = string(object, "hostName");
-        if (state.currentProgress == 0) state.currentProgress = longValue(object, "progress", 0);
+        normalizeClockState(state, stateObject);
         if (state.seq == 0) state.seq = longValue(envelope, "seq", 0);
         MinecraftClient client = MinecraftClient.getInstance();
         GroupClient.updateState(state, client.player == null ? "" : client.player.getUuidAsString());
@@ -94,6 +95,7 @@ public class GroupPacketHandler {
         } else if (GroupClient.usingHostScreen) {
             GroupClient.onHostScreenUnbound();
         }
+        if (GroupClient.hasPlayableBoundScreen()) GroupClient.restoreCurrentVideoToBoundScreen();
         message("已更新房间状态: " + GroupClient.roomName + "，成员 " + GroupClient.getMemberCount() + " 人", Formatting.GREEN);
     }
 
@@ -152,35 +154,52 @@ public class GroupPacketHandler {
         if (GroupClient.state != null) {
             GroupClient.state.currentVideo = null;
             GroupClient.state.currentProgress = 0;
+            GroupClient.state.progress = 0;
+            GroupClient.state.paused = false;
+            GroupClient.state.receivedAt = System.currentTimeMillis();
         }
-        ClientVideoScreen screen = boundScreenOrWarn();
+        ClientVideoScreen screen = GroupClient.getBoundScreen();
         if (screen == null) return;
         GroupClient.showCurrentVideo(screen, null);
         ScreenControl.stop(screen);
     }
 
     private static void pause(JsonObject object) {
-        ClientVideoScreen screen = boundScreenOrWarn();
-        if (screen == null) return;
         boolean paused = !object.has("paused") || object.get("paused").getAsBoolean();
-        long progress = longValue(object, "progress", -1);
+        long progress = longValue(object, "progress", GroupClient.state == null ? 0 : GroupClient.state.estimateProgress());
+        if (GroupClient.state != null) {
+            GroupClient.state.paused = paused;
+            GroupClient.state.progress = Math.max(progress, 0);
+            GroupClient.state.currentProgress = GroupClient.state.progress;
+            GroupClient.state.rate = floatValue(object, "rate", GroupClient.state.rate <= 0 ? 1f : GroupClient.state.rate);
+            GroupClient.state.serverTime = longValue(object, "serverTime", GroupClient.state.serverTime);
+            GroupClient.state.receivedAt = System.currentTimeMillis();
+        }
+        ClientVideoScreen screen = GroupClient.getBoundScreen();
+        if (screen == null || screen.player == null) return;
         ScreenControl.pause(screen, paused, progress);
     }
 
     private static void seek(JsonObject object) {
         long progress = longValue(object, "progress", 0);
-        if (GroupClient.state != null) GroupClient.state.currentProgress = progress;
-        ClientVideoScreen screen = boundScreenOrWarn();
-        if (screen == null) return;
+        if (GroupClient.state != null) {
+            GroupClient.state.progress = Math.max(progress, 0);
+            GroupClient.state.currentProgress = GroupClient.state.progress;
+            GroupClient.state.receivedAt = System.currentTimeMillis();
+        }
+        ClientVideoScreen screen = GroupClient.getBoundScreen();
+        if (screen == null || screen.player == null) return;
         ScreenControl.seek(screen, progress);
     }
 
     private static void syncState(JsonObject object) {
         GroupSyncManager.applySync(
                 longValue(object, "progress", 0),
+                longValue(object, "baseProgress", longValue(object, "progress", 0)),
+                longValue(object, "baseServerTime", 0),
+                longValue(object, "serverTime", longValue(object, "clientTime", System.currentTimeMillis())),
                 object.has("paused") && object.get("paused").getAsBoolean(),
-                object.has("rate") ? object.get("rate").getAsFloat() : 1f,
-                longValue(object, "clientTime", System.currentTimeMillis())
+                floatValue(object, "rate", 1f)
         );
     }
 
@@ -224,17 +243,10 @@ public class GroupPacketHandler {
 
     private static void playBound(VideoInfo info, long progress) {
         GroupSyncManager.setCurrentVideo(info, progress);
-        ClientVideoScreen screen = boundScreenOrWarn();
+        ClientVideoScreen screen = GroupClient.getBoundScreen();
         if (screen == null) return;
         GroupClient.showCurrentVideo(screen, info);
-        ScreenControl.play(screen, info, progress);
-    }
-
-    private static ClientVideoScreen boundScreenOrWarn() {
-        ClientVideoScreen screen = GroupClient.getBoundScreen();
-        if (screen != null) return screen;
-        message("已收到群组播放，但未绑定屏幕", Formatting.YELLOW);
-        return null;
+        ScreenControl.play(screen, info, GroupClient.state == null ? progress : GroupClient.state.estimateProgress());
     }
 
     private static void error(JsonObject object) {
@@ -252,6 +264,17 @@ public class GroupPacketHandler {
             return gson.fromJson(object.get("hostScreen"), ScreenDescriptor.class);
         }
         return object.isJsonObject() && object.has("areaName") ? gson.fromJson(object, ScreenDescriptor.class) : null;
+    }
+
+    private static void normalizeClockState(GroupRoomState state, JsonObject object) {
+        long progress = longValue(object, "progress", state.progress > 0 ? state.progress : state.currentProgress);
+        state.progress = Math.max(progress, 0);
+        state.currentProgress = state.progress;
+        state.baseProgress = longValue(object, "baseProgress", state.progress);
+        state.baseServerTime = longValue(object, "baseServerTime", state.baseServerTime);
+        state.serverTime = longValue(object, "serverTime", state.serverTime);
+        state.rate = floatValue(object, "rate", state.rate <= 0 ? 1f : state.rate);
+        state.receivedAt = System.currentTimeMillis();
     }
 
     private static void syncCurrentRoomFromList(JsonObject room) {
@@ -284,6 +307,10 @@ public class GroupPacketHandler {
 
     private static int intValue(JsonObject object, String key, int fallback) {
         return object.has(key) && !object.get(key).isJsonNull() ? object.get(key).getAsInt() : fallback;
+    }
+
+    private static float floatValue(JsonObject object, String key, float fallback) {
+        return object.has(key) && !object.get(key).isJsonNull() ? object.get(key).getAsFloat() : fallback;
     }
 
     private static String string(JsonObject object, String key) {

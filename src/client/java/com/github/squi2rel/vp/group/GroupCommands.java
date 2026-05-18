@@ -132,6 +132,7 @@ public class GroupCommands {
         JsonObject json = packet("room_join");
         payload(json).addProperty("roomId", roomId);
         send(json);
+        GroupClient.requestRoomState();
         source.sendFeedback(Text.literal("已发送加入房间请求").formatted(Formatting.GREEN));
         return Command.SINGLE_SUCCESS;
     }
@@ -165,6 +166,7 @@ public class GroupCommands {
             return 0;
         }
         GroupClient.sendBoundScreenToServer();
+        GroupClient.requestRoomState();
         source.sendFeedback(Text.literal("已绑定群组屏幕: " + GroupClient.boundArea + " / " + GroupClient.boundScreen).formatted(Formatting.GREEN));
         return Command.SINGLE_SUCCESS;
     }
@@ -188,12 +190,13 @@ public class GroupCommands {
             source.sendFeedback(Text.literal("绑定选项不存在或已过期").formatted(Formatting.RED));
             return 0;
         }
+        GroupClient.requestRoomState();
         source.sendFeedback(Text.literal("已绑定群组屏幕: " + GroupClient.boundArea + " / " + GroupClient.boundScreen).formatted(Formatting.GREEN));
         return Command.SINGLE_SUCCESS;
     }
 
     private static int play(FabricClientCommandSource source, String url) {
-        if (!checkPlaybackReady(source)) return 0;
+        if (!checkRoomReady(source)) return 0;
         MinecraftClient client = MinecraftClient.getInstance();
         String playerName = client.player == null ? "" : client.player.getName().getString();
         CompletableFuture<VideoInfo> future = VideoProviders.from(url, new NamedProviderSource(playerName));
@@ -215,13 +218,11 @@ public class GroupCommands {
                 return;
             }
             ClientVideoScreen screen = GroupClient.getBoundScreen();
-            if (screen == null) {
-                source.sendFeedback(Text.literal("群组屏幕未绑定或当前不可用").formatted(Formatting.RED));
-                return;
-            }
             GroupSyncManager.setCurrentVideo(info, 0);
-            GroupClient.showCurrentVideo(screen, info);
-            ScreenControl.play(screen, info, 0);
+            if (screen != null) {
+                GroupClient.showCurrentVideo(screen, info);
+                ScreenControl.play(screen, info, 0);
+            }
             JsonObject json = packet("play");
             JsonObject payload = payload(json);
             payload.add("video", gson.toJsonTree(info));
@@ -233,16 +234,18 @@ public class GroupCommands {
     }
 
     private static int stop(FabricClientCommandSource source) {
-        if (!checkPlaybackReady(source)) return 0;
-        ScreenControl.stop(GroupClient.getBoundScreen());
+        if (!checkRoomReady(source)) return 0;
+        ClientVideoScreen screen = GroupClient.getBoundScreen();
+        if (screen != null) ScreenControl.stop(screen);
         send(packet("stop"));
         source.sendFeedback(Text.literal("已发送群组停止").formatted(Formatting.GREEN));
         return Command.SINGLE_SUCCESS;
     }
 
     private static int pause(FabricClientCommandSource source) {
-        if (!checkPlaybackReady(source)) return 0;
-        ScreenControl.pause(GroupClient.getBoundScreen(), true, -1);
+        if (!checkRoomReady(source)) return 0;
+        ClientVideoScreen screen = GroupClient.getBoundScreen();
+        if (screen != null && screen.player != null) ScreenControl.pause(screen, true, -1);
         JsonObject json = packet("pause");
         payload(json).addProperty("paused", true);
         send(json);
@@ -251,8 +254,9 @@ public class GroupCommands {
     }
 
     private static int resume(FabricClientCommandSource source) {
-        if (!checkPlaybackReady(source)) return 0;
-        ScreenControl.pause(GroupClient.getBoundScreen(), false, -1);
+        if (!checkRoomReady(source)) return 0;
+        ClientVideoScreen screen = GroupClient.getBoundScreen();
+        if (screen != null && screen.player != null) ScreenControl.pause(screen, false, -1);
         JsonObject json = packet("pause");
         payload(json).addProperty("paused", false);
         send(json);
@@ -261,9 +265,10 @@ public class GroupCommands {
     }
 
     private static int seek(FabricClientCommandSource source, float seconds) {
-        if (!checkPlaybackReady(source)) return 0;
+        if (!checkRoomReady(source)) return 0;
         long progress = (long) (seconds * 1000);
-        ScreenControl.seek(GroupClient.getBoundScreen(), progress);
+        ClientVideoScreen screen = GroupClient.getBoundScreen();
+        if (screen != null && screen.player != null) ScreenControl.seek(screen, progress);
         JsonObject json = packet("seek");
         payload(json).addProperty("progress", progress);
         send(json);
@@ -332,11 +337,13 @@ public class GroupCommands {
     private static int status(FabricClientCommandSource source) {
         String bound = GroupClient.isBound() ? GroupClient.boundArea + " / " + GroupClient.boundScreen : "未绑定";
         String boundState = GroupClient.isBound() && GroupClient.getBoundScreen() == null ? "（当前不可用）" : "";
+        String localState = "\n绑定区域已加载: " + (GroupClient.isBoundAreaLoaded() ? "是" : "否")
+                + "\n本地播放器: " + (GroupClient.hasLocalPlayer() ? "存在" : "无");
         if (GroupClient.roomId == null) {
-            source.sendFeedback(Text.literal("当前未加入房间\n绑定屏幕: " + bound + boundState).formatted(Formatting.YELLOW));
+            source.sendFeedback(Text.literal("当前未加入房间\n绑定屏幕: " + bound + boundState + localState).formatted(Formatting.YELLOW));
             return Command.SINGLE_SUCCESS;
         }
-        source.sendFeedback(Text.literal("房间: %s (%s)\n房主: %s%s\n成员: %d\n序号: %d\n绑定屏幕: %s%s".formatted(
+        source.sendFeedback(Text.literal("房间: %s (%s)\n房主: %s%s\n成员: %d\n序号: %d\n绑定屏幕: %s%s%s".formatted(
                 GroupClient.roomName,
                 GroupClient.roomId,
                 GroupClient.getHostDisplayName(),
@@ -344,7 +351,8 @@ public class GroupCommands {
                 GroupClient.getMemberCount(),
                 GroupClient.lastSeq,
                 bound,
-                boundState
+                boundState,
+                localState
         )).formatted(Formatting.GOLD));
         return Command.SINGLE_SUCCESS;
     }
