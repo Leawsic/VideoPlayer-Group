@@ -341,7 +341,7 @@ public class GroupCommands {
                 GroupClient.roomId,
                 GroupClient.hostUuid,
                 GroupClient.host ? "（你是房主）" : "",
-                GroupClient.members.size(),
+                GroupClient.getMemberCount(),
                 GroupClient.lastSeq,
                 bound,
                 boundState

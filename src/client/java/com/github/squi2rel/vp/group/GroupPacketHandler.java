@@ -73,6 +73,7 @@ public class GroupPacketHandler {
         String text = rooms.asList().stream()
                 .filter(JsonElement::isJsonObject)
                 .map(JsonElement::getAsJsonObject)
+                .peek(GroupPacketHandler::syncCurrentRoomFromList)
                 .map(room -> "%s - %s".formatted(string(room, "roomId"), stringValue(room, "name", "roomName")))
                 .collect(Collectors.joining("\n"));
         message("房间列表:\n" + text, Formatting.GOLD);
@@ -92,7 +93,7 @@ public class GroupPacketHandler {
         } else if (GroupClient.usingHostScreen) {
             GroupClient.onHostScreenUnbound();
         }
-        message("已更新房间状态: " + GroupClient.roomName + "，成员 " + GroupClient.members.size() + " 人", Formatting.GREEN);
+        message("已更新房间状态: " + GroupClient.roomName + "，成员 " + GroupClient.getMemberCount() + " 人", Formatting.GREEN);
     }
 
     private static void screenBound(JsonObject object) {
@@ -107,11 +108,17 @@ public class GroupPacketHandler {
     }
 
     private static void memberJoined(JsonObject object) {
-        message("成员加入房间: " + string(object, "name"), Formatting.GREEN);
+        String uuid = string(object, "uuid");
+        String name = string(object, "name");
+        GroupClient.upsertMember(uuid, name);
+        message("成员加入房间: " + name, Formatting.GREEN);
     }
 
     private static void memberLeft(JsonObject object) {
-        message("成员离开房间: " + string(object, "name"), Formatting.YELLOW);
+        String uuid = string(object, "uuid");
+        String name = string(object, "name");
+        GroupClient.removeMember(uuid, name);
+        message("成员离开房间: " + name, Formatting.YELLOW);
     }
 
     private static void roomDisbanded(JsonObject object) {
@@ -246,12 +253,31 @@ public class GroupPacketHandler {
         return object.isJsonObject() && object.has("areaName") ? gson.fromJson(object, ScreenDescriptor.class) : null;
     }
 
+    private static void syncCurrentRoomFromList(JsonObject room) {
+        if (GroupClient.roomId == null || !Objects.equals(GroupClient.roomId, string(room, "roomId"))) return;
+        String roomName = stringValue(room, "name", "roomName");
+        if (!roomName.isEmpty()) {
+            GroupClient.roomName = roomName;
+            if (GroupClient.state != null) GroupClient.state.roomName = roomName;
+        }
+        String hostUuid = string(room, "hostUuid");
+        if (!hostUuid.isEmpty()) {
+            GroupClient.hostUuid = hostUuid;
+            if (GroupClient.state != null) GroupClient.state.hostUuid = hostUuid;
+        }
+        GroupClient.syncMemberCount(intValue(room, "members", -1));
+    }
+
     private static JsonObject payload(JsonObject object) {
         return object.has("payload") && object.get("payload").isJsonObject() ? object.getAsJsonObject("payload") : object;
     }
 
     private static long longValue(JsonObject object, String key, long fallback) {
         return object.has(key) && !object.get(key).isJsonNull() ? object.get(key).getAsLong() : fallback;
+    }
+
+    private static int intValue(JsonObject object, String key, int fallback) {
+        return object.has(key) && !object.get(key).isJsonNull() ? object.get(key).getAsInt() : fallback;
     }
 
     private static String string(JsonObject object, String key) {

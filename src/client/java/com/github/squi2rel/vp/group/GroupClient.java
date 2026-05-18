@@ -32,6 +32,7 @@ public class GroupClient {
     public static String hostUuid;
     public static boolean host;
     public static ArrayList<GroupMember> members = new ArrayList<>();
+    public static int memberCount;
     public static GroupRoomState state;
     public static long lastSeq;
     public static String boundArea;
@@ -49,6 +50,7 @@ public class GroupClient {
         roomName = roomState.roomName;
         hostUuid = roomState.hostUuid;
         members = roomState.members == null ? new ArrayList<>() : roomState.members;
+        memberCount = members.size();
         hostScreen = roomState.hostScreen;
         lastSeq = roomState.seq;
         host = hostUuid != null && hostUuid.equals(playerUuid);
@@ -82,6 +84,7 @@ public class GroupClient {
         hostUuid = null;
         host = false;
         members = new ArrayList<>();
+        memberCount = 0;
         state = null;
         lastSeq = 0;
         latestSync = null;
@@ -130,6 +133,34 @@ public class GroupClient {
 
     public static boolean shouldKeepLocalAreaLoaded(String runtimeAreaName) {
         return isInRoom() && isBoundToArea(runtimeAreaName) && runtimeAreaName.startsWith("local:");
+    }
+
+    public static void upsertMember(String uuid, String name) {
+        if ((uuid == null || uuid.isEmpty()) && (name == null || name.isEmpty())) return;
+        GroupMember member = findMember(uuid, name);
+        if (member == null) {
+            member = new GroupMember();
+            members.add(member);
+        }
+        if (uuid != null && !uuid.isEmpty()) member.uuid = uuid;
+        if (name != null && !name.isEmpty()) member.name = name;
+        member.host = hostUuid != null && hostUuid.equals(member.uuid);
+        memberCount = Math.max(memberCount, members.size());
+        if (state != null) state.members = members;
+    }
+
+    public static void removeMember(String uuid, String name) {
+        boolean removed = members.removeIf(member -> matchesMember(member, uuid, name));
+        if (removed) memberCount = members.size();
+        if (state != null) state.members = members;
+    }
+
+    public static void syncMemberCount(int count) {
+        if (count >= 0) memberCount = count;
+    }
+
+    public static int getMemberCount() {
+        return Math.max(memberCount, members.size());
     }
 
     public static void sendBoundScreenToServer() {
@@ -323,6 +354,19 @@ public class GroupClient {
         removeHostRuntimeArea();
         hostScreen = null;
         usingHostScreen = false;
+    }
+
+    private static GroupMember findMember(String uuid, String name) {
+        for (GroupMember member : members) {
+            if (matchesMember(member, uuid, name)) return member;
+        }
+        return null;
+    }
+
+    private static boolean matchesMember(GroupMember member, String uuid, String name) {
+        if (member == null) return false;
+        if (uuid != null && !uuid.isEmpty() && Objects.equals(member.uuid, uuid)) return true;
+        return name != null && !name.isEmpty() && Objects.equals(member.name, name);
     }
 
     private static void addBindingOption(BindingOption option) {
