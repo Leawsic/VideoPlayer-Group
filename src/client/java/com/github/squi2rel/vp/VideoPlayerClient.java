@@ -12,6 +12,7 @@ import com.github.squi2rel.vp.video.*;
 import com.github.squi2rel.vp.vivecraft.Vivecraft;
 import com.google.gson.Gson;
 import com.mojang.brigadier.arguments.*;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.suggestion.Suggestions;
@@ -150,6 +151,7 @@ public class VideoPlayerClient implements ClientModInitializer {
             });
         });
         ClientCommandRegistrationCallback.EVENT.register((d, c) -> d.register(ClientCommandManager.literal("vlc")
+                .then(helpCommand())
                 .then(LocalAreaCommands.register())
                 .then(GroupCommands.register())
                 .then(ClientCommandManager.literal("play")
@@ -472,6 +474,100 @@ public class VideoPlayerClient implements ClientModInitializer {
             }
         });
         bossBar = new ClientBossBar(UUID.randomUUID(), Text.of(""), 0, BossBar.Color.WHITE, BossBar.Style.PROGRESS, false, false, false);
+    }
+
+    private static LiteralArgumentBuilder<FabricClientCommandSource> helpCommand() {
+        return ClientCommandManager.literal("help")
+                .executes(s -> help(s.getSource(), "overview"))
+                .then(ClientCommandManager.literal("local")
+                        .executes(s -> help(s.getSource(), "local")))
+                .then(ClientCommandManager.literal("group")
+                        .executes(s -> help(s.getSource(), "group")))
+                .then(ClientCommandManager.literal("debug")
+                        .executes(s -> help(s.getSource(), "debug")));
+    }
+
+    private static int help(FabricClientCommandSource source, String topic) {
+        String text = switch (topic) {
+            case "local" -> """
+                    VideoPlayer local 帮助\
+                    
+                    /vlc local area here <name> [radius] - 以当前位置快速创建本地区域，默认半径 16\
+                    
+                    /vlc local area create <name> <x1> <y1> <z1> <x2> <y2> <z2> - 用两个角点创建区域\
+                    
+                    /vlc local area list - 列出本地区域\
+                    
+                    /vlc local area remove <name> - 删除本地区域\
+                    
+                    /vlc local screen here <area> <name> [width height] - 在准星方块面或面前快速创建屏幕，默认 4x2.25\
+                    
+                    /vlc local screen create <area> <name> <x1> <y1> <z1> <x2> <y2> <z2> <x3> <y3> <z3> <x4> <y4> <z4> - 用四角创建屏幕\
+                    
+                    /vlc local screen list <area> - 列出区域内屏幕\
+                    
+                    /vlc local screen remove <area> <name> - 删除屏幕\
+                    
+                    /vlc local status [area] - 查看当前服务器、维度、位置、区域加载和屏幕坐标""";
+            case "group" -> """
+                    VideoPlayer group 帮助\
+                    
+                    /vlc group connect <ws-url> - 连接 Room Server，并自动发送 hello\
+                    
+                    /vlc group disconnect - 断开 Room Server 并清理本地群组播放\
+                    
+                    /vlc group create <name> - 创建房间\
+                    
+                    /vlc group list - 列出房间\
+                    
+                    /vlc group join <roomId> - 加入房间\
+                    
+                    /vlc group leave - 离开房间\
+                    
+                    /vlc group disband - 解散房间\
+                    
+                    /vlc group bind <area> <screen> - 绑定群组播放屏幕；本地区域通常写 local:<name>\
+                    
+                    /vlc group unbind - 取消屏幕绑定；房主会通知成员取消共享屏幕\
+                    
+                    /vlc group bind-option <id> - 点击聊天中的绑定选项时自动执行，旧选项会过期\
+                    
+                    /vlc group play <url> - 解析并发送群组播放\
+                    
+                    /vlc group pause / resume / seek <seconds> / stop - 群组播放控制，可在本地屏幕不可用时发送\
+                    
+                    /vlc group queue add <url> / list / skip / clear - 群组队列操作\
+                    
+                    /vlc group status - 查看房间、房主、成员、绑定、区域加载和本地播放器状态\
+                    
+                    /vlc group raw <json> - 调试用，直接发送原始 JSON""";
+            case "debug" -> """
+                    VideoPlayer 调试提示\
+                    
+                    1. 快速建区：/vlc local area here c 8\
+                    
+                    2. 看向墙面快速建屏：/vlc local screen here c s1 4 2.25\
+                    
+                    3. 查看是否加载：/vlc local status c\
+                    
+                    4. 绑定本地屏幕：/vlc group bind local:c s1\
+                    
+                    5. 查看群组状态：/vlc group status\
+                    
+                    6. 成员收到群主共享屏幕后，可点击聊天选项选择本地屏幕或群主广播屏幕""";
+            default -> """
+                    VideoPlayer 帮助\
+                    
+                    /vlc help local - 查看本地区域和本地屏幕命令\
+                    
+                    /vlc help group - 查看 Room Server 群组命令\
+                    
+                    /vlc help debug - 查看常用调试流程\
+                    
+                    常用流程：/vlc local area here c -> /vlc local screen here c s1 -> /vlc group connect <ws-url> -> /vlc group create <name> -> /vlc group bind local:c s1 -> /vlc group play <url>""";
+        };
+        source.sendFeedback(Text.literal(text).formatted(Formatting.GOLD));
+        return 1;
     }
 
     private ClientVideoArea getArea(CommandContext<FabricClientCommandSource> s) {
