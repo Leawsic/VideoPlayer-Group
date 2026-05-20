@@ -26,6 +26,8 @@ public class GroupClient {
     private static long seq;
     private static int nextBindingOptionId;
     private static String hostRuntimeArea;
+    private static String promptedHostScreenKey;
+    private static String selectedHostScreenKey;
 
     public static String roomId;
     public static String roomName;
@@ -53,6 +55,7 @@ public class GroupClient {
         hostName = roomState.hostName;
         members = roomState.members == null ? new ArrayList<>() : roomState.members;
         memberCount = members.size();
+        refreshHostNameFromMembers();
         hostScreen = roomState.hostScreen;
         lastSeq = roomState.seq;
         host = hostUuid != null && hostUuid.equals(playerUuid);
@@ -95,6 +98,8 @@ public class GroupClient {
         suspendReason = null;
         hostScreen = null;
         usingHostScreen = false;
+        promptedHostScreenKey = null;
+        selectedHostScreenKey = null;
         pendingBindingOptions.clear();
         LocalAreaManager.tick();
     }
@@ -183,12 +188,14 @@ public class GroupClient {
         if (name != null && !name.isEmpty()) member.name = name;
         member.host = hostUuid != null && hostUuid.equals(member.uuid);
         memberCount = Math.max(memberCount, members.size());
+        refreshHostNameFromMembers();
         if (state != null) state.members = members;
     }
 
     public static void removeMember(String uuid, String name) {
         boolean removed = members.removeIf(member -> matchesMember(member, uuid, name));
         if (removed) memberCount = members.size();
+        refreshHostNameFromMembers();
         if (state != null) state.members = members;
     }
 
@@ -233,8 +240,16 @@ public class GroupClient {
         hostScreen = screen;
         if (state != null) state.hostScreen = screen;
         if (screen == null || host) return;
+        String screenKey = hostScreenKey(screen);
+        if (Objects.equals(selectedHostScreenKey, screenKey)) {
+            restoreCurrentVideoToBoundScreen();
+            return;
+        }
+        if (Objects.equals(promptedHostScreenKey, screenKey) && !pendingBindingOptions.isEmpty()) return;
         ArrayList<BindingOption> localOptions = collectAvailableScreens();
         if (localOptions.isEmpty()) {
+            selectedHostScreenKey = screenKey;
+            pendingBindingOptions.clear();
             bindHostScreen();
             message("未发现本地可用屏幕，已自动使用群主广播屏幕。", Formatting.GREEN);
             return;
@@ -245,6 +260,8 @@ public class GroupClient {
     public static void onHostScreenUnbound() {
         hostScreen = null;
         if (state != null) state.hostScreen = null;
+        promptedHostScreenKey = null;
+        selectedHostScreenKey = null;
         pendingBindingOptions.clear();
         if (usingHostScreen) {
             stopBoundPlayback();
@@ -256,7 +273,10 @@ public class GroupClient {
 
     public static boolean bindHostScreen() {
         if (hostScreen == null || roomId == null) return false;
-        createRuntimeAreaFromHostScreen(hostScreen);
+        String runtimeAreaName = hostScreen.runtimeAreaName(roomId);
+        if (!Objects.equals(boundArea, runtimeAreaName) || !Objects.equals(boundScreen, hostScreen.screenName)) {
+            createRuntimeAreaFromHostScreen(hostScreen);
+        }
         requestRoomState();
         restoreCurrentVideoToBoundScreen();
         return true;
@@ -304,6 +324,7 @@ public class GroupClient {
 
     public static void showBindingChoices(ArrayList<BindingOption> localOptions, ScreenDescriptor descriptor) {
         pendingBindingOptions.clear();
+        promptedHostScreenKey = hostScreenKey(descriptor);
         nextBindingOptionId = 1;
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null) return;
@@ -321,12 +342,15 @@ public class GroupClient {
     }
 
     public static boolean bindOption(int optionId) {
-        BindingOption option = pendingBindingOptions.get(optionId);
+        BindingOption option = pendingBindingOptions.remove(optionId);
         if (option == null) return false;
+        pendingBindingOptions.clear();
         if (option.hostScreen) {
             hostScreen = option.descriptor;
+            selectedHostScreenKey = hostScreenKey(option.descriptor);
             bindHostScreen();
         } else {
+            selectedHostScreenKey = hostScreenKey(hostScreen);
             bind(option.area, option.screen);
             requestRoomState();
             restoreCurrentVideoToBoundScreen();
@@ -364,7 +388,9 @@ public class GroupClient {
     }
 
     public static void showCurrentVideo(ClientVideoScreen screen, VideoInfo info) {
+        if (screen == null) return;
         ScreenControl.updatePlaylist(screen, info == null ? new VideoInfo[0] : new VideoInfo[]{info});
+        if (screen.player == null && info != null) screen.setToPlay(info);
     }
 
     public static void savePlaybackState(ClientVideoScreen screen) {
@@ -385,9 +411,27 @@ public class GroupClient {
 
     private static void cleanupHostScreen() {
         pendingBindingOptions.clear();
+        promptedHostScreenKey = null;
+        selectedHostScreenKey = null;
         removeHostRuntimeArea();
         hostScreen = null;
         usingHostScreen = false;
+    }
+
+    private static String hostScreenKey(ScreenDescriptor screen) {
+        if (screen == null) return null;
+        return screen.server + "|" + screen.dimension + "|" + screen.areaName + "|" + screen.screenName;
+    }
+
+    private static void refreshHostNameFromMembers() {
+        if (hostUuid == null || hostUuid.isEmpty()) return;
+        for (GroupMember member : members) {
+            if (member != null && Objects.equals(hostUuid, member.uuid) && member.name != null && !member.name.isEmpty()) {
+                hostName = member.name;
+                if (state != null) state.hostName = hostName;
+                return;
+            }
+        }
     }
 
     private static GroupMember findMember(String uuid, String name) {

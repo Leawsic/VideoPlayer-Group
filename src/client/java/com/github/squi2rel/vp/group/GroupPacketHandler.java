@@ -86,6 +86,7 @@ public class GroupPacketHandler {
         JsonObject stateObject = object.has("state") && object.get("state").isJsonObject() ? object.getAsJsonObject("state") : object;
         if (state.roomName == null || state.roomName.isEmpty()) state.roomName = stringValue(object, "name", "roomName");
         if (state.hostName == null || state.hostName.isEmpty()) state.hostName = string(object, "hostName");
+        if (state.hostName == null || state.hostName.isEmpty()) state.hostName = hostNameFromMembers(state);
         normalizeClockState(state, stateObject);
         if (state.seq == 0) state.seq = longValue(envelope, "seq", 0);
         MinecraftClient client = MinecraftClient.getInstance();
@@ -264,6 +265,16 @@ public class GroupPacketHandler {
             return gson.fromJson(object.get("hostScreen"), ScreenDescriptor.class);
         }
         return object.isJsonObject() && object.has("areaName") ? gson.fromJson(object, ScreenDescriptor.class) : null;
+    }
+
+    private static String hostNameFromMembers(GroupRoomState state) {
+        if (state.hostUuid == null || state.hostUuid.isEmpty() || state.members == null) return "";
+        for (GroupMember member : state.members) {
+            if (member != null && Objects.equals(state.hostUuid, member.uuid) && member.name != null && !member.name.isEmpty()) {
+                return member.name;
+            }
+        }
+        return "";
     }
 
     private static void normalizeClockState(GroupRoomState state, JsonObject object) {

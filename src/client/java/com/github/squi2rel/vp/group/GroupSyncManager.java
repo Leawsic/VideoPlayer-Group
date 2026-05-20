@@ -13,6 +13,7 @@ public class GroupSyncManager {
         if (!GroupClient.isInRoom() || !GroupClient.isBound()) return;
         ClientVideoScreen screen = GroupClient.getBoundScreen();
         if (screen == null || GroupClient.state == null || GroupClient.state.currentVideo == null) return;
+        GroupClient.showCurrentVideo(screen, GroupClient.state.currentVideo);
         if (screen.player == null) {
             restorePlayback(screen);
             return;
@@ -37,6 +38,7 @@ public class GroupSyncManager {
 
         ClientVideoScreen screen = GroupClient.getBoundScreen();
         if (screen == null || state.currentVideo == null) return;
+        GroupClient.showCurrentVideo(screen, state.currentVideo);
         if (screen.player == null) {
             restorePlayback(screen);
             return;
