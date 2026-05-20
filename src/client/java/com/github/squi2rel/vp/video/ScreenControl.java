@@ -13,8 +13,8 @@ public final class ScreenControl {
     }
 
     public static void stop(ClientVideoScreen screen) {
-        if (screen == null || screen.player == null) return;
-        screen.player.stop();
+        if (screen == null) return;
+        screen.stopPlayback();
     }
 
     public static void pause(ClientVideoScreen screen, boolean paused, long progress) {

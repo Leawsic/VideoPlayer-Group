@@ -354,7 +354,7 @@ public class VideoPlayerClient implements ClientModInitializer {
                 .then(ClientCommandManager.literal("stop")
                         .executes(s -> {
                             if (checkInvalid(s, true)) return 0;
-                            currentScreen.player.stop();
+                            ScreenControl.stop(currentScreen);
                             return 1;
                         }))
                 .then(ClientCommandManager.literal("setmeta")

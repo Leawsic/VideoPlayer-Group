@@ -59,6 +59,15 @@ public class ClientVideoScreen extends VideoScreen {
         if (player != null) player.cleanup();
     }
 
+    public void stopPlayback() {
+        if (player == null) return;
+        player.stop();
+        player.cleanup();
+        player = null;
+        toPlay = null;
+        toSeek = -1;
+    }
+
     public void draw(MatrixStack matrices, VertexConsumerProvider.Immediate immediate) {
         if (player != null) player.draw(matrices, immediate, this);
     }

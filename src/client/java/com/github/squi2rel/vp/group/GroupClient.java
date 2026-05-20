@@ -159,8 +159,7 @@ public class GroupClient {
     }
 
     public static void requestRoomState() {
-        if (!isInRoom() || !connection.isConnected()) return;
-        send(packet("room_state_request"));
+        restoreCurrentVideoToBoundScreen();
     }
 
     public static void onBoundAreaLoaded() {
